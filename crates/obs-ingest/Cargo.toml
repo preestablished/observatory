@@ -1,0 +1,9 @@
+[package]
+name = "obs-ingest"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+obs-store = { path = "../obs-store" }
+obs-types = { path = "../obs-types" }
