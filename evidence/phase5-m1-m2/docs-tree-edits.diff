@@ -1,0 +1,84 @@
+--- /tmp/claude-1000/-home-infra-admin-git-preestablished-observatory/d93f3dcf-acb4-488e-afb7-03d6c37c09be/scratchpad/API.md	2026-07-16 14:40:50.330897071 +0000
++++ /home/infra-admin/.agents/projects/determinism/docs/observatory/API.md	2026-07-16 14:42:16.518477704 +0000
+@@ -47,23 +47,29 @@
+ }
+ 
+ enum SourceService {
+-  SOURCE_UNSPECIFIED = 0;
+-  EXPLORATION_ORCHESTRATOR = 1;  // the only v1 (Phase 5) event producer
+-  DETERMINISM_HYPERVISOR = 2;    // reserved; scrape-only in v1 (no gRPC to observatory)
+-  STATE_SCORER = 3;              // reserved; scrape + Stats pulls in v1, no event push
+-  REPLAY_RENDERER = 4;           // Phase 7 producer (replay/divergence events)
+-  CONTROL_PLANE = 5;     // reserved for run lifecycle relays; unused in v1
+-  GUEST_SDK = 6;         // reserved; guest findings are relayed by the orchestrator in v1
++  // Values carry the SOURCE_SERVICE_ prefix per buf's ENUM_VALUE_PREFIX lint
++  // (control-plane lints STANDARD; reconciliation decision D2).
++  SOURCE_SERVICE_UNSPECIFIED = 0;
++  SOURCE_SERVICE_EXPLORATION_ORCHESTRATOR = 1;  // the only v1 (Phase 5) event producer
++  SOURCE_SERVICE_DETERMINISM_HYPERVISOR = 2;    // reserved; scrape-only in v1 (no gRPC to observatory)
++  SOURCE_SERVICE_STATE_SCORER = 3;              // reserved; scrape + Stats pulls in v1, no event push
++  SOURCE_SERVICE_REPLAY_RENDERER = 4;           // Phase 7 producer (replay/divergence events)
++  SOURCE_SERVICE_CONTROL_PLANE = 5;     // reserved for run lifecycle relays; unused in v1
++  SOURCE_SERVICE_GUEST_SDK = 6;         // reserved; guest findings are relayed by the orchestrator in v1
+ }
+ 
+ message EventBatch { repeated EventEnvelope events = 1; }
+ 
+ message PublishAck {
+-  // Highest CONTIGUOUS seq durably committed for this producer identity
+-  // (run_id, source_service, producer_id). On reconnect, resend from acked+1.
++  // Highest seq durably committed IN STREAM ORDER for this producer identity
++  // (run_id, source_service, producer_id). Gaps are permitted — producers
++  // legitimately drop-oldest under buffer pressure, so the ack advances past
++  // missing seqs. On reconnect, resend from acked+1; resending is always safe
++  // because the server dedups on (identity, seq).
+   uint64 acked_seq = 1;
+   // Optional: set when the server rejected events (bad envelope_version,
+-  // unparseable payload JSON). Rejected events are NOT acked; producer should
++  // unparseable payload JSON, missing run_id from a run-scoped source).
++  // Rejected events are NOT acked; producer should
+   // log-and-drop after `max_reject_retries`.
+   repeated Rejection rejections = 2;
+ }
+@@ -102,7 +108,7 @@
+ | event_type | when | payload |
+ |---|---|---|
+ | `node-added` | each child committed to the tree | `{node_id: str, parent_id: str?` (null ⇒ root) `, snapshot_ref: str, depth: u64, progress_score: f64, novelty_score: f64, cell_key: str?, stage: u64, guest_time_ns: u64, input_delta_bytes: u64, expansion_idx: u64, features?: obj` (flat name→number map of the experiment-configured decoded-feature subset: the orchestrator persists these values into node attrs `feat/<name>` from `ScoreResult.decoded` — orchestrator/state-scorer docs — and copies them here; feature names are canonical feature-map names, invalid/guarded values are omitted rather than NaN; the coverage map derives from this map, see ARCHITECTURE §6) `}` |
+-| `node-pruned` | node removed/retired from frontier or tree | `{node_id: str, reason: "duplicate"\|"regression"\|"exhausted"\|"frontier-evict"\|"stage-gate"}` (`exhausted` = the orchestrator's `prune_action: exhausted` commit rule — node committed as `PRUNED` (the store's `NodeStatus`) with `attrs.prune_reason`, never enters the frontier) |
++| `node-pruned` | node removed/retired from frontier or tree, or a candidate discarded pre-commit | `{node_id: str?` (absent ⇒ the candidate was discarded before it ever received a node id — duplicate/regression/frontier-evict pre-commit prunes; reconciliation decision D4) `, parent_id: str, reason: "duplicate"\|"regression"\|"exhausted"\|"frontier-evict"\|"stage-gate"}` (`exhausted` = the orchestrator's `prune_action: exhausted` commit rule — node committed as `PRUNED` (the store's `NodeStatus`) with `attrs.prune_reason`, never enters the frontier) |
+ | `best-score-improved` | global best progress score increases | `{node_id: str, score: f64, prev_best: f64, expansion_idx: u64}` |
+ | `stall-detected` | plateau detector trips | `{window_expansions: u64, best_score: f64, escalation_level: u64, since_expansion_idx: u64}` |
+ | `escalation-changed` | plateau-ladder escalation level changes (up or down) | `{from_level: u64, to_level: u64, expansion_idx: u64}` |
+--- /tmp/claude-1000/-home-infra-admin-git-preestablished-observatory/d93f3dcf-acb4-488e-afb7-03d6c37c09be/scratchpad/ARCHITECTURE.md	2026-07-16 14:40:50.331897020 +0000
++++ /home/infra-admin/.agents/projects/determinism/docs/observatory/ARCHITECTURE.md	2026-07-16 14:42:26.592961433 +0000
+@@ -90,7 +90,9 @@
+ - **Idempotency:** `UNIQUE(run_id, source_service, seq)` + `INSERT OR IGNORE`.
+   Producers that reconnect resend from their last unacked `seq`; duplicates vanish.
+ - **Acks** are sent only after the transaction commits (durable ack). The ack carries
+-  the highest contiguous `seq` committed per `(run_id, source_service)`.
++  the highest `seq` committed in stream order per `(run_id, source_service,
++  producer_id)` — gaps permitted (producers legitimately drop-oldest; the server
++  tracks a monotone high-water mark, not contiguity; reconciliation decision D7).
+ - **Backpressure:** if the writer channel is full, ingest stops reading from the
+   gRPC streams (natural HTTP/2 flow control). Producers buffer locally
+   (see `INTEGRATION.md`); observatory must never be on the search's critical path.
+@@ -103,7 +105,7 @@
+ |---|---|
+ | any | upsert `runs` (first_seen, last_event, bump per-type counters); first event for an unknown `run_id` sets `runs.status = 'running'` and triggers the control-plane experiment-config fetch (INTEGRATION §3) |
+ | `node-added` | insert `tree_nodes`; update `runs.best_score` if higher; upsert `coverage_cells` from the payload's `features` map (grid-declared features; §6) |
+-| `node-pruned` | `tree_nodes.pruned = 1, prune_reason` |
++| `node-pruned` | `node_id` present → `tree_nodes.pruned = 1, prune_reason`; absent (pre-commit discard, decision D4) → `runs.nodes_pruned` counter only |
+ | `best-score-improved` | `runs.best_score`, `runs.best_node_id`; insert `score_points` |
+ | `stall-detected` / `goal-reached` / `assertion-violated` / `reachability-hit` (v1) and `divergence-detected` / `divergence-bisect-result` (Phase 7) | insert `findings` (kind = event_type); `goal-reached` also sets `runs.status = 'goal_reached'`, `runs.goal_reached = 1` |
+ | `escalation-changed` | update the run's current escalation-level gauge (dashboard stall banner; the durable trail is the raw event log) |
+--- /tmp/claude-1000/-home-infra-admin-git-preestablished-observatory/d93f3dcf-acb4-488e-afb7-03d6c37c09be/scratchpad/INTEGRATION.md	2026-07-16 14:40:50.331897020 +0000
++++ /home/infra-admin/.agents/projects/determinism/docs/observatory/INTEGRATION.md	2026-07-16 14:42:30.388766931 +0000
+@@ -29,7 +29,7 @@
+ | Producer | Events (API.md §2) | Cadence / trigger | Notes |
+ |---|---|---|---|
+ | exploration-orchestrator (v1 — the only Phase 5 producer) | `node-added` | every committed child | the firehose; carries the `features` map — the experiment-configured decoded-feature subset the orchestrator persists into node attrs (`feat/<name>`, sourced from `ScoreResult.decoded`; orchestrator/state-scorer docs). The coverage map derives from it (ARCHITECTURE §6). Emit AFTER the snapshot-store commit succeeds, so the UI never shows phantom nodes. |
+-| | `node-pruned` | every prune/retire decision on a previously committed node (reasons incl. `exhausted` per the orchestrator's commit rules) | duplicates discarded pre-commit are NOT events (would double the firehose); they appear in aggregate via `batch-completed` and `eo_duplicates_total` |
++| | `node-pruned` | every prune/retire decision — on a previously committed node (`node_id` present; reasons incl. `exhausted` per the orchestrator's commit rules) or a candidate discarded pre-commit (`node_id` absent; decision D4) | id-less pre-commit prunes add firehose volume — tradeoff accepted in the reconciliation log; if volume becomes a problem it is a producer-side rate-limit decision, not a schema one. Aggregates also appear via `batch-completed` and `eo_duplicates_total` |
+ | | `best-score-improved` | global best increases | drives the dashboard score curve and SSE `score` |
+ | | `stall-detected` | plateau detector trips | one event per trip, not per tick |
+ | | `escalation-changed` | plateau-ladder level change (up or down) | one event per level change; drives the dashboard escalation gauge |
