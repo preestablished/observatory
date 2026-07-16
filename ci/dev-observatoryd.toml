@@ -1,0 +1,10 @@
+# Dev/CI config for observatoryd (tempdir-relative storage path; created
+# on startup). Used by the runtime smokes in the plan's acceptance steps.
+version = 1
+
+[server]
+grpc_listen = "127.0.0.1:7470"
+http_listen = "127.0.0.1:7471"
+
+[storage]
+path = "./target/dev/observatory.db"

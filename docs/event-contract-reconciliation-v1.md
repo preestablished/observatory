@@ -189,8 +189,18 @@ capture of these edits is committed at
 - `observatory/INTEGRATION.md` §1: `node-pruned` row no longer claims
   pre-commit discards are not events (D4).
 
-## Proto pin (package 02)
+## Proto pin (package 02, landed 2026-07-16)
 
-- control-plane merge commit: `pending — filled by package 02`
+- control-plane merge commit (PR #4, squash):
+  `853a0b200df3b7cd4770393f408997414536bf7f`
 - `proto/determinism/observatory/v1/events.proto` blake3:
-  `pending — filled by package 02`
+  `144f8cc6f413a88d6c39a3d77415a0eb6597939381503ec4a99881edf8e4ccc2`
+- D2 addendum discovered while landing: buf STANDARD also enforces
+  RPC_REQUEST_STANDARD_NAME / RPC_RESPONSE_STANDARD_NAME /
+  RPC_REQUEST_RESPONSE_UNIQUE, which the owner doc's wire shapes (bare
+  `EventEnvelope` stream; `PublishAck` shared by both RPCs) deliberately
+  violate. Resolved with file-scoped `ignore_only` entries in
+  control-plane's `buf.yaml` (the orchestrator's
+  `RPC_RESPONSE_STANDARD_NAME` entry is precedent) rather than renaming
+  away from API.md §1 — D1's owner-doc-verbatim rule wins over the
+  no-new-ignores preference.

@@ -1,0 +1,12 @@
+M0 WriteBatch micro-bench (IMPLEMENTATION-PLAN §M0 acceptance: ≥50k single-table inserts/s, batched 500/txn)
+
+Date: 2026-07-16
+Command: cargo bench -p obs-store --bench write_batch
+Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs; Intel(R) Core(TM) i5-8400 CPU @ 2.80GHz; disk: sda 0 Samsung SSD 860 sdb 0 Samsung SSD 850 sdc 0 Samsung SSD 860
+Note: this is the local dev box, not the Spark target hardware.
+
+Result:
+write_batch: 500000 rows in 4.339636034s -> 115217 inserts/s (batch 500/txn)
+
+115,217 inserts/s >= 50,000 target (2.3x headroom over the 10k events/s M1 budget's 5x requirement).
+CI runs the reduced >=5k/s smoke (crates/obs-store/tests/insert_rate_smoke.rs, wired by package 04's m0-store-smoke job).

@@ -6,3 +6,4 @@ license.workspace = true
 
 [dependencies]
 determinism-proto = { workspace = true, features = ["observatory"] }
+thiserror = { workspace = true }
