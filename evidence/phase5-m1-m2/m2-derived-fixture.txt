@@ -1,0 +1,14 @@
+M2 derived-metrics acceptance: derived values equal hand-computed numbers
+on a pinned event+scrape fixture (FixedClock schedule).
+
+Date: 2026-07-16
+Command: cargo test -p obs-derive --test rollup_integration derived_metrics_match_hand_computed_fixture
+Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs (local dev box)
+
+Hand-computed expectations (written in the test before running it):
+  search_novel_state_rate = (40+60) / (40+60+20+5)      = 0.8   -> PASS
+  search_dedup_hit_rate   = (90-30) / (300-100)          = 0.3   -> PASS
+  worker_slot_utilization = 6 / 8                        = 0.75  -> PASS
+  search_frontier_size    = 55 (fresh scrape refines the checkpoint's 42) -> PASS
+  search_best_score       = 0.75 (runs.best_score gauge)          -> PASS
+  snapshot_dedup_ratio: inputs absent -> metric ABSENT (not zero)  -> PASS

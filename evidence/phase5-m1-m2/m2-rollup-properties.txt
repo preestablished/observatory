@@ -1,0 +1,27 @@
+M2 rollup correctness (IMPLEMENTATION-PLAN §M2): property tests + crash
+convergence + counter-reset handling.
+
+Date: 2026-07-16
+Command: cargo test -p obs-derive
+Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs (local dev box)
+
+- proptest fold_equals_direct_aggregation: random sample sets -> fold ->
+  equals direct aggregation for every grain and aggregate column (n, sum,
+  min, max, first, last). PASS (256 cases/property, proptest default).
+- proptest promotion_equals_direct_fold: 5s->1m promotion equals folding
+  raw at 1m directly. PASS.
+- crash_mid_fold_converges_after_rerun: fold+high-water are one writer
+  transaction; re-running after a lost transaction converges to the same
+  rollup tables as an uninterrupted fold (row-level compare). PASS.
+- counter_reset_never_goes_negative (rate.rs): synthetic mid-window
+  counter reset -> no negative rate points. PASS.
+- folds_closed_buckets_only_and_is_idempotent_on_rerun: open buckets wait;
+  re-tick with no new closed data is a byte no-op (dump compare). PASS.
+- writer_merges_rollup_rows_on_conflict + monotone high-water. PASS.
+
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+running 5 tests
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+running 0 tests
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s

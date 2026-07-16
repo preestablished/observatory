@@ -325,7 +325,8 @@ fn project_coverage(
          VALUES (?1, ?2, ?3, ?4, 1, ?5, ?6, ?7, ?7)
          ON CONFLICT (run_id, map_id, cx, cy) DO UPDATE SET
            visits = visits + 1,
-           last_ns = excluded.last_ns,
+           first_ns = min(first_ns, excluded.first_ns),
+           last_ns = max(last_ns, excluded.last_ns),
            best_node_id = CASE WHEN excluded.best_score > best_score
                                THEN excluded.best_node_id ELSE best_node_id END,
            best_score = max(best_score, excluded.best_score)",
@@ -536,7 +537,8 @@ fn project_replay(
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6)
                  ON CONFLICT (artifact_id) DO UPDATE SET
                    status = excluded.status, pct = excluded.pct,
-                   updated_ns = excluded.updated_ns",
+                   updated_ns = excluded.updated_ns
+                 WHERE excluded.updated_ns >= updated_ns",
                 rusqlite::params![
                     artifact_id,
                     record.run_id,
@@ -561,7 +563,8 @@ fn project_replay(
                    verified = excluded.verified,
                    video_uri = coalesce(excluded.video_uri, video_uri),
                    timeline_uri = coalesce(excluded.timeline_uri, timeline_uri),
-                   updated_ns = excluded.updated_ns",
+                   updated_ns = excluded.updated_ns
+                 WHERE excluded.updated_ns >= updated_ns",
                 rusqlite::params![
                     artifact_id,
                     record.run_id,
@@ -588,7 +591,7 @@ fn project_replay(
                  ON CONFLICT (artifact_id) DO UPDATE SET
                    video_uri = coalesce(excluded.video_uri, video_uri),
                    timeline_uri = coalesce(excluded.timeline_uri, timeline_uri),
-                   updated_ns = excluded.updated_ns",
+                   updated_ns = max(updated_ns, excluded.updated_ns)",
                 rusqlite::params![
                     artifact_id,
                     record.run_id,
