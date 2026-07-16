@@ -6,8 +6,51 @@ jobs:
   rust:
     strategy:
       matrix:
-        runner: [ubuntu-latest]
+        # M0 acceptance: cargo test green on x86_64 AND aarch64.
+        # ubuntu-24.04-arm is free for public repos only; if this leg cannot
+        # be provisioned, file a bead and record it as pending CI debt in the
+        # handback — do not drop the aarch64 requirement silently.
+        runner: [ubuntu-latest, ubuntu-24.04-arm]
     runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      # Path dep ../control-plane/crates/determinism-proto: pinned so
+      # upstream changes cannot break this repo asynchronously. Bump
+      # deliberately per docs/proto-pin.md.
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/control-plane
+          ref: 853a0b200df3b7cd4770393f408997414536bf7f
+          path: control-plane
+      - uses: dtolnay/rust-toolchain@stable
+      - run: cargo fmt --all -- --check
+        working-directory: repo
+        if: matrix.runner == 'ubuntu-latest'
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+        working-directory: repo
+        if: matrix.runner == 'ubuntu-latest'
+      - run: cargo build --workspace
+        working-directory: repo
+      - run: cargo test --workspace
+        working-directory: repo
+
+  # MAP.md CI determinism obligation. Placeholder until package 06 replaces
+  # this step with the canonical
+  #   cargo test -p obs-ingest --release --test determinism_replay
+  # form (never a name filter — a filter matching zero tests passes
+  # vacuously; --test fails loudly if the target is missing).
+  determinism-gate:
+    runs-on: ubuntu-latest
+    continue-on-error: false
+    steps:
+      - run: echo "determinism-gate placeholder — replaced by package 06"
+
+  # Reduced M0 write-rate smoke (>=5k inserts/s; the >=50k number is local
+  # NVMe evidence, see evidence/phase5-m1-m2/m0-writebatch-bench.txt).
+  m0-store-smoke:
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
@@ -15,11 +58,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: ${{ github.repository_owner }}/control-plane
+          ref: 853a0b200df3b7cd4770393f408997414536bf7f
           path: control-plane
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo fmt --all -- --check
-        working-directory: repo
-      - run: cargo build --workspace
-        working-directory: repo
-      - run: cargo test --workspace
+      - run: cargo test -p obs-store --release --test insert_rate_smoke
         working-directory: repo
