@@ -1,5 +1,5 @@
 [package]
-name = "obs-http"
+name = "obs-derive"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,13 +7,11 @@ license.workspace = true
 [dependencies]
 obs-store = { path = "../obs-store" }
 obs-types = { path = "../obs-types" }
-axum = { workspace = true }
-prometheus = { workspace = true }
 rusqlite = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+proptest = "1"
 tempfile = { workspace = true }
-tower = { workspace = true }

@@ -168,7 +168,55 @@ fn apply_batch(
     match batch {
         WriteBatch::Events(records) => apply_events(tx, records, ctx, fanout),
         WriteBatch::MetricSamples(samples) => apply_metric_samples(tx, samples),
+        WriteBatch::RollupFold {
+            grain,
+            rows,
+            high_water_ns,
+        } => apply_rollup_fold(tx, *grain, rows, *high_water_ns),
     }
+}
+
+/// Merges folded rows into the grain table and advances the grain's
+/// high-water mark — atomically with the fold, which is what makes
+/// re-running after a crash converge (a crashed fold never commits rows
+/// without also committing the mark).
+fn apply_rollup_fold(
+    tx: &rusqlite::Transaction<'_>,
+    grain: obs_types::Grain,
+    rows: &[obs_types::RollupRow],
+    high_water_ns: i64,
+) -> Result<Applied, rusqlite::Error> {
+    let mut applied = Applied::default();
+    let sql = format!(
+        "INSERT INTO {table} (series_id, bucket_ns, n, sum, min, max, first, last)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
+         ON CONFLICT (series_id, bucket_ns) DO UPDATE SET
+           n = n + excluded.n,
+           sum = sum + excluded.sum,
+           min = min(min, excluded.min),
+           max = max(max, excluded.max),
+           last = excluded.last",
+        table = grain.table()
+    );
+    let mut stmt = tx.prepare_cached(&sql)?;
+    for row in rows {
+        applied.inserted += stmt.execute(rusqlite::params![
+            row.series_id,
+            row.bucket_ns,
+            row.n,
+            row.sum,
+            row.min,
+            row.max,
+            row.first,
+            row.last,
+        ])?;
+    }
+    tx.execute(
+        "INSERT INTO rollup_state (grain, high_water_ns) VALUES (?1, ?2)
+         ON CONFLICT (grain) DO UPDATE SET high_water_ns = max(high_water_ns, excluded.high_water_ns)",
+        rusqlite::params![grain.key(), high_water_ns],
+    )?;
+    Ok(applied)
 }
 
 fn apply_events(

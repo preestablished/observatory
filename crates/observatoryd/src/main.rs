@@ -151,10 +151,23 @@ async fn run(config: observatoryd::Config) -> anyhow::Result<()> {
         info!(targets = config.scrape.targets.len(), "scrape loop up");
         Some(task)
     };
+    // Rollup ticker (5 s folds; hourly promotions per ARCHITECTURE §3.2)
+    // and the 10 s derived-metrics ticker.
+    let rollup_task = tokio::spawn(
+        obs_derive::RollupTicker::new(read_pool.clone(), writer.clone(), Arc::clone(&clock)).run(
+            std::time::Duration::from_secs(5),
+            std::time::Duration::from_secs(3_600),
+        ),
+    );
+    let derived_task = tokio::spawn(
+        obs_derive::DerivedTicker::new(read_pool.clone(), writer.clone(), Arc::clone(&clock))
+            .run(std::time::Duration::from_secs(10)),
+    );
+
     let ingest = obs_ingest::IngestService::new(
         writer.clone(),
         read_pool.clone(),
-        clock,
+        Arc::clone(&clock),
         ingest_metrics.clone(),
     );
     let grpc_addr: std::net::SocketAddr = config
@@ -177,6 +190,8 @@ async fn run(config: observatoryd::Config) -> anyhow::Result<()> {
     let state = obs_http::AppState {
         db_path: db_path.clone(),
         metrics: Arc::clone(&metrics),
+        pool: read_pool.clone(),
+        clock: Arc::clone(&clock),
     };
     let listener = tokio::net::TcpListener::bind(&config.server.http_listen)
         .await
@@ -197,9 +212,18 @@ async fn run(config: observatoryd::Config) -> anyhow::Result<()> {
         Ok(Err(error)) => warn!(%error, "gRPC server exited with error"),
         Err(join_error) => warn!(%join_error, "gRPC server task panicked"),
     }
+    // Abort AND await every task holding a WriterHandle clone — the
+    // writer thread only exits once all handles drop, and join() below
+    // must not race an aborted-but-undropped task.
     gauge_task.abort();
+    rollup_task.abort();
+    derived_task.abort();
+    let _ = gauge_task.await;
+    let _ = rollup_task.await;
+    let _ = derived_task.await;
     if let Some(task) = scrape_task {
         task.abort();
+        let _ = task.await;
     }
     drop(writer);
     tokio::task::spawn_blocking(move || writer_join.join())

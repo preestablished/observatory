@@ -134,16 +134,74 @@ pub struct MetricSample {
     pub value: f64,
 }
 
-/// Typed batches the single writer task consumes. Package 05 adds
-/// projection application to `Events`; packages 07/08 add the metric and
-/// rollup arms' producers.
+/// Rollup grains (ARCHITECTURE §3.2). Width in ns; one table per grain.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Grain {
+    S5,
+    M1,
+    M10,
+}
+
+impl Grain {
+    #[must_use]
+    pub fn width_ns(self) -> i64 {
+        match self {
+            Grain::S5 => 5_000_000_000,
+            Grain::M1 => 60_000_000_000,
+            Grain::M10 => 600_000_000_000,
+        }
+    }
+
+    /// Table name (static, never interpolated from input).
+    #[must_use]
+    pub fn table(self) -> &'static str {
+        match self {
+            Grain::S5 => "rollup_5s",
+            Grain::M1 => "rollup_1m",
+            Grain::M10 => "rollup_10m",
+        }
+    }
+
+    /// `rollup_state.grain` key.
+    #[must_use]
+    pub fn key(self) -> &'static str {
+        match self {
+            Grain::S5 => "5s",
+            Grain::M1 => "1m",
+            Grain::M10 => "10m",
+        }
+    }
+}
+
+/// One folded rollup row (identical shape at every grain).
+#[derive(Clone, Debug, PartialEq)]
+pub struct RollupRow {
+    pub series_id: i64,
+    pub bucket_ns: i64,
+    pub n: i64,
+    pub sum: f64,
+    pub min: f64,
+    pub max: f64,
+    pub first: f64,
+    pub last: f64,
+}
+
+/// Typed batches the single writer task consumes.
 #[derive(Clone, Debug)]
 pub enum WriteBatch {
-    /// Raw events; the writer applies `INSERT OR IGNORE` plus (from
-    /// package 05) same-transaction projections for inserted rows only.
+    /// Raw events; the writer applies `INSERT OR IGNORE` plus
+    /// same-transaction projections for inserted rows only.
     Events(Vec<EventRecord>),
     /// Scraped or derived samples for `metric_series`/`metrics_raw`.
     MetricSamples(Vec<MetricSample>),
+    /// A rollup fold: rows merged into the grain table AND the grain's
+    /// high-water advanced in the SAME transaction (crash-idempotency
+    /// rides on that atomicity).
+    RollupFold {
+        grain: Grain,
+        rows: Vec<RollupRow>,
+        high_water_ns: i64,
+    },
 }
 
 impl WriteBatch {
@@ -152,6 +210,7 @@ impl WriteBatch {
         match self {
             WriteBatch::Events(records) => records.len(),
             WriteBatch::MetricSamples(samples) => samples.len(),
+            WriteBatch::RollupFold { rows, .. } => rows.len(),
         }
     }
 

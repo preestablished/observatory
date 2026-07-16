@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+obs-derive = { path = "../obs-derive" }
 obs-http = { path = "../obs-http" }
 obs-ingest = { path = "../obs-ingest" }
 obs-scrape = { path = "../obs-scrape" }

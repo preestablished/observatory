@@ -13,4 +13,16 @@ Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs (NOT the Spark)
   verify OK: 300000 events, checksum 0x3ba2c2098b937f60
 
 10-minute sustained local run (6,000,000 events at 10k/s):
-  RESULT PENDING - appended below when the run completes.
+
+
+10-minute sustained local run RESULT (2026-07-16, local dev box — NOT Spark):
+  Command: obs-events-gen publish --seed 999 --events 6000000 --vocab catalog --rate 10000
+  published: sent=6000000 acked_seq=6000000 rejections=0 reconnects=0
+  wall clock: 10:21 (≈9.66k events/s effective, pacing overhead included)
+  writer channel depth: 0 for the entire run (bound 4096) — sampled 1/s
+  batch-flush latency (obs_ingest_batch_flush_seconds): 12,000 flushes,
+    overall avg 38.3 ms; worst 1 s-window avg 196.1 ms. The histogram's
+    p99 was not captured by the 1 Hz sampler; avg and worst-window are
+    both comfortably under the 500 ms ack budget. A true p99 measurement
+    belongs to the Spark run (still pending — Spark unreachable).
+  generator max RSS 7.4 MB (daemon RSS not captured this run)

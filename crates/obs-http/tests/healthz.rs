@@ -7,9 +7,12 @@ use obs_store::{Store, StoreConfig};
 use tower::ServiceExt;
 
 fn state_for(db_path: std::path::PathBuf) -> AppState {
+    let pool = obs_store::ReadPool::open(&db_path, 2).unwrap();
     AppState {
         db_path,
         metrics: Arc::new(Metrics::new()),
+        pool,
+        clock: Arc::new(obs_types::FixedClock(0)),
     }
 }
 
@@ -34,6 +37,9 @@ async fn healthz_503_when_db_unreadable() {
     let dir = tempfile::tempdir().unwrap();
     let db_path = dir.path().join("h.db");
     drop(Store::open(&StoreConfig::new(&db_path)).unwrap());
+    // Build the state (and its read pool) while the file is readable —
+    // in production the pool predates any permission change too.
+    let state = state_for(db_path.clone());
 
     // The IMPLEMENTATION-PLAN M0 chmod test: revoking permissions must
     // degrade /healthz — which holds only because the probe opens a NEW
@@ -46,7 +52,7 @@ async fn healthz_503_when_db_unreadable() {
         return;
     }
 
-    let router = obs_http::router(state_for(db_path.clone()));
+    let router = obs_http::router(state);
     let response = router
         .oneshot(Request::get("/healthz").body(Body::empty()).unwrap())
         .await

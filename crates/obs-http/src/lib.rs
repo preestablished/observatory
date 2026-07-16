@@ -51,6 +51,8 @@ impl Default for Metrics {
     }
 }
 
+pub mod api;
+
 #[derive(Clone)]
 pub struct AppState {
     /// Database path for the fresh-open health probe (deliberately NOT a
@@ -58,13 +60,19 @@ pub struct AppState {
     /// per-request open makes /healthz honest about DB availability).
     pub db_path: PathBuf,
     pub metrics: Arc<Metrics>,
+    /// Read pool for the REST API queries.
+    pub pool: obs_store::ReadPool,
+    /// Injectable time source for default query windows (D6).
+    pub clock: Arc<dyn obs_types::Clock>,
 }
 
-/// Builds the M0 router: `/healthz` + `/metrics`.
+/// Builds the router: `/healthz`, `/metrics`, and the M2 REST endpoints.
 pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/healthz", get(healthz))
         .route("/metrics", get(metrics))
+        .route("/api/v1/runs/{run_id}/score-curve", get(api::score_curve))
+        .route("/api/v1/runs/{run_id}/timeseries", get(api::timeseries))
         .with_state(state)
 }
 
