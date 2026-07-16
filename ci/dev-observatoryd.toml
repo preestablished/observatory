@@ -8,3 +8,11 @@ http_listen = "127.0.0.1:7471"
 
 [storage]
 path = "./target/dev/observatory.db"
+
+# Stub target on a test port: the daemon must degrade gracefully when it
+# is down (failures counted, nothing crashes).
+[scrape]
+interval = "5s"
+[[scrape.targets]]
+name = "stub-service"
+url = "http://127.0.0.1:19199/metrics"

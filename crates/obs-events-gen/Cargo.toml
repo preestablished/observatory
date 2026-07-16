@@ -1,20 +1,21 @@
 [package]
-name = "obs-ingest"
+name = "obs-events-gen"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 
 [dependencies]
-obs-store = { path = "../obs-store" }
 obs-types = { path = "../obs-types" }
+# Fixed, portable PRNG: the whole determinism gate rides on the stream
+# being byte-reproducible for a given seed.
+rand_chacha = "0.9"
+rand_core = "0.9"
 rusqlite = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tokio-stream = { workspace = true }
 tonic = { workspace = true }
-tracing = { workspace = true }
 
-[dev-dependencies]
-obs-events-gen = { path = "../obs-events-gen" }
-obs-store = { path = "../obs-store", features = ["test-hooks"] }
-tempfile = { workspace = true }
+[[bin]]
+name = "obs-events-gen"
+path = "src/main.rs"

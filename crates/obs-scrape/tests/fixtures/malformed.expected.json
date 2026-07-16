@@ -1,0 +1,8 @@
+{
+  "malformed_lines": 6,
+  "samples": [
+    { "metric": "good_counter", "labels_json": "{}", "value": 41 },
+    { "metric": "good_gauge", "labels_json": "{\"a\":\"b\"}", "value": 2.5 },
+    { "metric": "good_counter_with_ts", "labels_json": "{}", "value": 44 }
+  ]
+}

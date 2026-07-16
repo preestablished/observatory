@@ -1,0 +1,20 @@
+# HELP dh_slots_total Total VM slots.
+# TYPE dh_slots_total gauge
+dh_slots_total 8
+# HELP dh_slots_busy Busy VM slots.
+# TYPE dh_slots_busy gauge
+dh_slots_busy 5
+# HELP dh_jobs_completed_total Completed fork/exec jobs.
+# TYPE dh_jobs_completed_total counter
+dh_jobs_completed_total 1432
+# HELP dh_fork_restore_seconds Fork-restore latency.
+# TYPE dh_fork_restore_seconds histogram
+dh_fork_restore_seconds_bucket{le="0.05"} 210
+dh_fork_restore_seconds_bucket{le="0.1"} 340
+dh_fork_restore_seconds_bucket{le="0.5"} 400
+dh_fork_restore_seconds_bucket{le="+Inf"} 412
+dh_fork_restore_seconds_sum 31.5
+dh_fork_restore_seconds_count 412
+# HELP dh_determinism_failures_total Divergences detected by the hypervisor.
+# TYPE dh_determinism_failures_total counter
+dh_determinism_failures_total 0

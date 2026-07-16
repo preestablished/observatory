@@ -1,0 +1,12 @@
+# HELP rr_jobs_active Render jobs in progress.
+# TYPE rr_jobs_active gauge
+rr_jobs_active 2
+# HELP rr_jobs_completed_total Render jobs completed.
+# TYPE rr_jobs_completed_total counter
+rr_jobs_completed_total 87
+# HELP rr_verify_failures_total Replays that failed verification.
+# TYPE rr_verify_failures_total counter
+rr_verify_failures_total 1
+# HELP rr_encode_fps Current encode throughput.
+# TYPE rr_encode_fps gauge
+rr_encode_fps{job="run-a/000123"} 59.94

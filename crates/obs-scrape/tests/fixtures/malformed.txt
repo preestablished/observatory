@@ -1,0 +1,12 @@
+# A body mixing valid lines with every malformation class the parser
+# must skip (counted) without failing the scrape.
+# TYPE good_counter counter
+good_counter 41
+this is not a metric line
+bad_no_value
+bad_value{label="x"} notanumber
+bad_unclosed{label="x" 1
+{ }
+good_counter 43 1720000000123 extra
+good_gauge{a="b"} 2.5
+good_counter_with_ts 44 1720000000123

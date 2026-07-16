@@ -1,0 +1,12 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "ss_bytes_logical_total", "labels_json": "{}", "value": 987654321 },
+    { "metric": "ss_bytes_physical_total", "labels_json": "{}", "value": 123456789 },
+    { "metric": "ss_disk_used_bytes", "labels_json": "{}", "value": 402653184 },
+    { "metric": "ss_disk_total_bytes", "labels_json": "{}", "value": 1073741824 },
+    { "metric": "ss_page_dedup_hits_total", "labels_json": "{\"shard\":\"0\",\"tier\":\"warm\"}", "value": 55210 },
+    { "metric": "ss_page_dedup_hits_total", "labels_json": "{\"shard\":\"0\",\"tier\":\"hot\"}", "value": 90021 },
+    { "metric": "ss_page_writes_total", "labels_json": "{}", "value": 145231 }
+  ]
+}

@@ -1,0 +1,21 @@
+   Compiling thiserror v1.0.69
+   Compiling thiserror-impl v1.0.69
+   Compiling parking_lot_core v0.9.12
+   Compiling protobuf v3.7.2
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling protobuf-support v3.7.2
+   Compiling prometheus v0.14.0
+   Compiling parking_lot v0.12.5
+   Compiling lazy_static v1.5.0
+   Compiling obs-events-gen v0.1.0 (/home/infra-admin/git/preestablished/observatory/crates/obs-events-gen)
+   Compiling obs-store v0.1.0 (/home/infra-admin/git/preestablished/observatory/crates/obs-store)
+   Compiling obs-ingest v0.1.0 (/home/infra-admin/git/preestablished/observatory/crates/obs-ingest)
+    Finished `release` profile [optimized] target(s) in 52.48s
+     Running tests/determinism_replay.rs (target/release/deps/determinism_replay-ae1d54d562e812d1)
+
+running 1 test
+test hundred_k_double_replay_is_byte_identical ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 20.84s
+

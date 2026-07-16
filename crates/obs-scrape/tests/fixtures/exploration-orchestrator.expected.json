@@ -1,0 +1,12 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "eo_expansions_total", "labels_json": "{\"run_id\":\"run-a\"}", "value": 51234 },
+    { "metric": "eo_commits_total", "labels_json": "{\"run_id\":\"run-a\"}", "value": 40110 },
+    { "metric": "eo_duplicates_total", "labels_json": "{\"run_id\":\"run-a\"}", "value": 11124 },
+    { "metric": "eo_frontier_size", "labels_json": "{\"run_id\":\"run-a\"}", "value": 2048 },
+    { "metric": "eo_best_score", "labels_json": "{\"run_id\":\"run-a\"}", "value": 0.9137 },
+    { "metric": "eo_inflight_jobs", "labels_json": "{}", "value": 14 },
+    { "metric": "eo_stall_level", "labels_json": "{\"run_id\":\"run-a\"}", "value": 1 }
+  ]
+}

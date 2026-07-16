@@ -1,0 +1,9 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "cp_api_requests_total", "labels_json": "{\"method\":\"GET\",\"path\":\"/api/v1/runs\"}", "value": 4021 },
+    { "metric": "cp_api_requests_total", "labels_json": "{\"method\":\"POST\",\"path\":\"/api/v1/render\"}", "value": 12 },
+    { "metric": "cp_render_jobs_queued", "labels_json": "{}", "value": 3 },
+    { "metric": "cp_build_info", "labels_json": "{\"version\":\"1.2.3\"}", "value": 1 }
+  ]
+}

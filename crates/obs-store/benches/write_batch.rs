@@ -35,7 +35,7 @@ fn main() {
     let dir = tempfile::tempdir().expect("tempdir");
     let store = Store::open(&StoreConfig::new(dir.path().join("bench.db"))).expect("open");
     let (conn, _pool) = store.into_parts();
-    let (writer, join) = spawn_writer(conn);
+    let (writer, join) = spawn_writer(conn, obs_store::ProjectionContext::default());
 
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()

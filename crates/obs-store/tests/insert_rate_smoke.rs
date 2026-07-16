@@ -34,7 +34,7 @@ async fn sustains_at_least_5k_inserts_per_second() {
     let store = Store::open(&StoreConfig::new(dir.path().join("smoke.db"))).unwrap();
     let pool = store.read_pool();
     let (conn, _) = store.into_parts();
-    let (writer, join) = spawn_writer(conn);
+    let (writer, join) = spawn_writer(conn, obs_store::ProjectionContext::default());
 
     let start = Instant::now();
     let mut seq = 1;

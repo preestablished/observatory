@@ -1,16 +1,13 @@
 #![forbid(unsafe_code)]
+//! gRPC event ingest: validation (D3-tolerant), batching (500/50 ms),
+//! durable gap-tolerant acks (D7), and the projection write path via the
+//! single store writer.
 
-use obs_types::EventEnvelope;
+pub mod ack;
+pub mod batcher;
+pub mod feature_map;
+pub mod service;
+pub mod validate;
 
-pub fn validate_event(event: &EventEnvelope) -> Result<(), &'static str> {
-    if event.envelope_version != 1 {
-        return Err("unsupported envelope_version");
-    }
-    if event.run_id.is_empty() {
-        return Err("run_id is required");
-    }
-    if event.event_type.is_empty() {
-        return Err("event_type is required");
-    }
-    Ok(())
-}
+pub use service::{server, IngestService};
+pub use validate::validate;

@@ -1,0 +1,16 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "sc_score_requests_total", "labels_json": "{}", "value": 88231 },
+    { "metric": "sc_gpu_batch_latency_seconds_bucket", "labels_json": "{\"le\":\"0.005\"}", "value": 1200 },
+    { "metric": "sc_gpu_batch_latency_seconds_bucket", "labels_json": "{\"le\":\"0.01\"}", "value": 3400 },
+    { "metric": "sc_gpu_batch_latency_seconds_bucket", "labels_json": "{\"le\":\"0.025\"}", "value": 4100 },
+    { "metric": "sc_gpu_batch_latency_seconds_bucket", "labels_json": "{\"le\":\"0.1\"}", "value": 4190 },
+    { "metric": "sc_gpu_batch_latency_seconds_bucket", "labels_json": "{\"le\":\"+Inf\"}", "value": 4200 },
+    { "metric": "sc_gpu_batch_latency_seconds_sum", "labels_json": "{}", "value": 38.7 },
+    { "metric": "sc_gpu_batch_latency_seconds_count", "labels_json": "{}", "value": 4200 },
+    { "metric": "sc_archive_cells", "labels_json": "{}", "value": 15320 },
+    { "metric": "sc_dedup_hits_total", "labels_json": "{}", "value": 22110 },
+    { "metric": "sc_embed_queue_depth", "labels_json": "{}", "value": 37 }
+  ]
+}

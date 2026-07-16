@@ -1,0 +1,9 @@
+# HELP is_bursts_total Input bursts synthesized.
+# TYPE is_bursts_total counter
+is_bursts_total 240010
+# HELP is_synth_seconds Synthesis latency.
+# TYPE is_synth_seconds summary
+is_synth_seconds{quantile="0.5"} 0.012
+is_synth_seconds{quantile="0.99"} 0.087
+is_synth_seconds_sum 4.2
+is_synth_seconds_count 305

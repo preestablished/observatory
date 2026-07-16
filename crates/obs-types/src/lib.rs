@@ -161,6 +161,23 @@ impl WriteBatch {
     }
 }
 
+/// One committed event with its `events.rowid` (the SSE `Last-Event-ID`
+/// replay key for M3 consumers).
+#[derive(Clone, Debug)]
+pub struct CommittedEvent {
+    pub rowid: i64,
+    pub record: EventRecord,
+}
+
+/// Post-commit broadcast payload: the rows actually inserted by one write
+/// transaction plus the run ids they touched. Consumers in this phase:
+/// metrics and tests; the SSE hub / obs-tree / obs-alert attach in M3/M4.
+#[derive(Clone, Debug, Default)]
+pub struct CommittedBatch {
+    pub events: Vec<CommittedEvent>,
+    pub run_ids: Vec<String>,
+}
+
 /// Injectable time source (decision D6): every timestamp observatory itself
 /// mints flows through this so the determinism gate can pin time.
 pub trait Clock: Send + Sync + 'static {

@@ -1,0 +1,15 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "dh_slots_total", "labels_json": "{}", "value": 8 },
+    { "metric": "dh_slots_busy", "labels_json": "{}", "value": 5 },
+    { "metric": "dh_jobs_completed_total", "labels_json": "{}", "value": 1432 },
+    { "metric": "dh_fork_restore_seconds_bucket", "labels_json": "{\"le\":\"0.05\"}", "value": 210 },
+    { "metric": "dh_fork_restore_seconds_bucket", "labels_json": "{\"le\":\"0.1\"}", "value": 340 },
+    { "metric": "dh_fork_restore_seconds_bucket", "labels_json": "{\"le\":\"0.5\"}", "value": 400 },
+    { "metric": "dh_fork_restore_seconds_bucket", "labels_json": "{\"le\":\"+Inf\"}", "value": 412 },
+    { "metric": "dh_fork_restore_seconds_sum", "labels_json": "{}", "value": 31.5 },
+    { "metric": "dh_fork_restore_seconds_count", "labels_json": "{}", "value": 412 },
+    { "metric": "dh_determinism_failures_total", "labels_json": "{}", "value": 0 }
+  ]
+}

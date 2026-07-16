@@ -36,16 +36,59 @@ jobs:
       - run: cargo test --workspace
         working-directory: repo
 
-  # MAP.md CI determinism obligation. Placeholder until package 06 replaces
-  # this step with the canonical
-  #   cargo test -p obs-ingest --release --test determinism_replay
-  # form (never a name filter — a filter matching zero tests passes
-  # vacuously; --test fails loudly if the target is missing).
+  # MAP.md CI determinism obligation: 100k-envelope double-replay must be
+  # byte-identical. The --test form fails loudly if the target disappears
+  # (a name filter could match zero tests and pass vacuously).
   determinism-gate:
     runs-on: ubuntu-latest
     continue-on-error: false
     steps:
-      - run: echo "determinism-gate placeholder — replaced by package 06"
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/control-plane
+          ref: 853a0b200df3b7cd4770393f408997414536bf7f
+          path: control-plane
+      - uses: dtolnay/rust-toolchain@stable
+      - name: determinism gate (100k double-replay, byte-identical)
+        run: cargo test -p obs-ingest --release --test determinism_replay
+        working-directory: repo
+
+  # Reduced kill -9 chaos run (100k; the full 1M run is local evidence,
+  # see evidence/phase5-m1-m2/m1-killnine.txt).
+  chaos-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/control-plane
+          ref: 853a0b200df3b7cd4770393f408997414536bf7f
+          path: control-plane
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash scripts/chaos-killnine.sh 100000
+        working-directory: repo
+
+  # 30 s at 10k events/s asserting only "no error, channel depth bounded"
+  # (the 10-min ack-p99 number stays Spark-local evidence).
+  throughput-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: repo
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/control-plane
+          ref: 853a0b200df3b7cd4770393f408997414536bf7f
+          path: control-plane
+      - uses: dtolnay/rust-toolchain@stable
+      - run: bash scripts/throughput-smoke.sh
+        working-directory: repo
 
   # Reduced M0 write-rate smoke (>=5k inserts/s; the >=50k number is local
   # NVMe evidence, see evidence/phase5-m1-m2/m0-writebatch-bench.txt).

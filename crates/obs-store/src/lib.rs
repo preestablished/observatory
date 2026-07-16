@@ -12,11 +12,16 @@ use rusqlite::Connection;
 
 use obs_types::StoreError;
 
+pub mod dump;
+pub mod metrics;
 pub mod pool;
+pub mod projections;
 pub mod schema;
 pub mod writer;
 
+pub use metrics::IngestMetrics;
 pub use pool::ReadPool;
+pub use projections::{GridHint, ProjectionContext, StandaloneData};
 pub use writer::{spawn_writer, WriterHandle, WRITER_CHANNEL_CAPACITY};
 
 /// Storage-level options (subset of `observatoryd.toml` `[storage]`).

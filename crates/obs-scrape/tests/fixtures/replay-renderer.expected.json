@@ -1,0 +1,9 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "rr_jobs_active", "labels_json": "{}", "value": 2 },
+    { "metric": "rr_jobs_completed_total", "labels_json": "{}", "value": 87 },
+    { "metric": "rr_verify_failures_total", "labels_json": "{}", "value": 1 },
+    { "metric": "rr_encode_fps", "labels_json": "{\"job\":\"run-a/000123\"}", "value": 59.94 }
+  ]
+}

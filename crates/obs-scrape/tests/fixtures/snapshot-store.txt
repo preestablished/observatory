@@ -1,0 +1,19 @@
+# HELP ss_bytes_logical_total Logical bytes written.
+# TYPE ss_bytes_logical_total counter
+ss_bytes_logical_total 987654321
+# HELP ss_bytes_physical_total Physical bytes stored after dedup.
+# TYPE ss_bytes_physical_total counter
+ss_bytes_physical_total 123456789
+# HELP ss_disk_used_bytes Bytes used on the snapshot volume.
+# TYPE ss_disk_used_bytes gauge
+ss_disk_used_bytes 402653184
+# HELP ss_disk_total_bytes Snapshot volume capacity.
+# TYPE ss_disk_total_bytes gauge
+ss_disk_total_bytes 1073741824
+# HELP ss_page_dedup_hits_total Page-level dedup hits.
+# TYPE ss_page_dedup_hits_total counter
+ss_page_dedup_hits_total{tier="warm",shard="0"} 55210
+ss_page_dedup_hits_total{tier="hot",shard="0"} 90021
+# HELP ss_page_writes_total Page writes.
+# TYPE ss_page_writes_total counter
+ss_page_writes_total 145231

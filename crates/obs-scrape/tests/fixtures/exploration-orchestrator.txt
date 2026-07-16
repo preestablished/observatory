@@ -1,0 +1,21 @@
+# HELP eo_expansions_total Expansions performed.
+# TYPE eo_expansions_total counter
+eo_expansions_total{run_id="run-a"} 51234
+# HELP eo_commits_total Nodes committed to the tree.
+# TYPE eo_commits_total counter
+eo_commits_total{run_id="run-a"} 40110
+# HELP eo_duplicates_total Duplicate states discarded.
+# TYPE eo_duplicates_total counter
+eo_duplicates_total{run_id="run-a"} 11124
+# HELP eo_frontier_size Current frontier size.
+# TYPE eo_frontier_size gauge
+eo_frontier_size{run_id="run-a"} 2048
+# HELP eo_best_score Best score seen so far.
+# TYPE eo_best_score gauge
+eo_best_score{run_id="run-a"} 0.9137
+# HELP eo_inflight_jobs Jobs currently in flight.
+# TYPE eo_inflight_jobs gauge
+eo_inflight_jobs 14
+# HELP eo_stall_level Escalation level of the stall detector.
+# TYPE eo_stall_level gauge
+eo_stall_level{run_id="run-a"} 1

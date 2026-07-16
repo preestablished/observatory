@@ -1,0 +1,16 @@
+M1 sustained-throughput acceptance (IMPLEMENTATION-PLAN §M1 bullet 3):
+10k events/s sustained, ack p99 < 500 ms, bounded channel depth, flat
+memory. The owner target is Spark hardware; the Spark was NOT reachable
+from this session — numbers below are from the local dev box, honestly
+labeled. CI runs the 30 s smoke (throughput-smoke job).
+
+Date: 2026-07-16
+Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs (NOT the Spark)
+
+30 s CI-sized smoke (scripts/throughput-smoke.sh):
+  published: sent=300000 acked_seq=300000 rejections=0 reconnects=0
+  max observed channel depth = 0 (bound 4096)
+  verify OK: 300000 events, checksum 0x3ba2c2098b937f60
+
+10-minute sustained local run (6,000,000 events at 10k/s):
+  RESULT PENDING - appended below when the run completes.

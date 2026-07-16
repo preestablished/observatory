@@ -1,0 +1,10 @@
+{
+  "malformed_lines": 0,
+  "samples": [
+    { "metric": "is_bursts_total", "labels_json": "{}", "value": 240010 },
+    { "metric": "is_synth_seconds", "labels_json": "{\"quantile\":\"0.5\"}", "value": 0.012 },
+    { "metric": "is_synth_seconds", "labels_json": "{\"quantile\":\"0.99\"}", "value": 0.087 },
+    { "metric": "is_synth_seconds_sum", "labels_json": "{}", "value": 4.2 },
+    { "metric": "is_synth_seconds_count", "labels_json": "{}", "value": 305 }
+  ]
+}

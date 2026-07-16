@@ -1,0 +1,16 @@
+M1 kill -9 chaos acceptance (IMPLEMENTATION-PLAN §M1 bullet 2): 1M-event
+firehose, kill -9 mid-flight, restart, resume from acks -> zero loss, zero
+duplicates.
+
+Date: 2026-07-16
+Command: bash scripts/chaos-killnine.sh 1000000
+Machine: Linux 6.8.0-124-generic x86_64; 2 CPUs (local dev box, not the Spark target)
+
+Result (full run):
+  chaos: kill -9 daemon after 2445ms of publishing at 10k/s
+  generator reconnected (1 reconnect), resumed, resent; dedup absorbed overlap
+  published: sent=1000000 acked_seq=1000000 rejections=0 reconnects=1
+  verify OK: 1000000 events, 0 unknown-flagged, checksum 0xfb14423c518e0be6
+  chaos: OK (1000000 events, kill -9 survived, zero loss, zero duplicates)
+
+CI runs the reduced 100k variant as the chaos-smoke job.

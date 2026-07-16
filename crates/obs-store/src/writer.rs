@@ -1,12 +1,20 @@
 //! The single-writer task: one dedicated thread owns the write connection;
 //! input is a bounded mpsc of [`WriteBatch`] messages; one SQLite
 //! transaction per flush; a oneshot completion per batch is sent only
-//! after the transaction commits (the durable-ack hook for ingest).
+//! after the transaction commits (the durable ack the ingest server relies
+//! on). Projections run in the same transaction, only for events rows
+//! actually inserted; a post-commit broadcast fans the inserted rows out.
+
+use std::sync::Arc;
 
 use rusqlite::Connection;
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{broadcast, mpsc, oneshot};
 
-use obs_types::{EventRecord, MetricSample, StoreError, WriteBatch};
+use obs_types::{
+    CommittedBatch, CommittedEvent, EventRecord, MetricSample, StoreError, WriteBatch,
+};
+
+use crate::projections::{self, ProjectionContext};
 
 /// Bounded writer input (ARCHITECTURE §1: mpsc, 4096).
 pub const WRITER_CHANNEL_CAPACITY: usize = 4096;
@@ -14,11 +22,23 @@ pub const WRITER_CHANNEL_CAPACITY: usize = 4096;
 /// How many queued batches one flush (= one transaction) may coalesce.
 const MAX_BATCHES_PER_FLUSH: usize = 64;
 
+/// Post-commit broadcast capacity (slow consumers observe `Lagged`).
+const BROADCAST_CAPACITY: usize = 1024;
+
+/// Event type that aborts the surrounding transaction — a test hook for
+/// the bulk-atomicity acceptance (behind the `test-hooks` feature only).
+#[cfg(feature = "test-hooks")]
+pub const TEST_ABORT_EVENT_TYPE: &str = "__obs_test_abort__";
+
 /// Per-batch application result, delivered post-commit.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default)]
 pub struct Applied {
     /// Rows actually inserted (duplicates ignored by `INSERT OR IGNORE`).
     pub inserted: usize,
+    /// Highest seq per folded identity `(run_id, source_service_stored)`
+    /// seen in this batch (committed OR deduplicated — both count as
+    /// covered for acks, decision D7).
+    pub max_seq_by_identity: Vec<((String, String), u64)>,
 }
 
 struct WriteRequest {
@@ -30,6 +50,7 @@ struct WriteRequest {
 #[derive(Clone)]
 pub struct WriterHandle {
     sender: mpsc::Sender<WriteRequest>,
+    committed: broadcast::Sender<Arc<CommittedBatch>>,
 }
 
 impl WriterHandle {
@@ -48,21 +69,37 @@ impl WriterHandle {
     pub fn depth(&self) -> usize {
         self.sender.max_capacity() - self.sender.capacity()
     }
+
+    /// Subscribes to the post-commit fan-out.
+    #[must_use]
+    pub fn subscribe(&self) -> broadcast::Receiver<Arc<CommittedBatch>> {
+        self.committed.subscribe()
+    }
 }
 
 /// Spawns the writer thread owning `conn`. The thread drains the channel,
 /// applies each flush in one transaction, and exits (after a final WAL
 /// checkpoint) when every [`WriterHandle`] is dropped.
-pub fn spawn_writer(conn: Connection) -> (WriterHandle, std::thread::JoinHandle<()>) {
+pub fn spawn_writer(
+    conn: Connection,
+    ctx: ProjectionContext,
+) -> (WriterHandle, std::thread::JoinHandle<()>) {
     let (sender, receiver) = mpsc::channel(WRITER_CHANNEL_CAPACITY);
+    let (committed, _) = broadcast::channel(BROADCAST_CAPACITY);
+    let broadcast_out = committed.clone();
     let join = std::thread::Builder::new()
         .name("obs-store-writer".to_owned())
-        .spawn(move || writer_loop(conn, receiver))
+        .spawn(move || writer_loop(conn, receiver, ctx, broadcast_out))
         .expect("spawn writer thread");
-    (WriterHandle { sender }, join)
+    (WriterHandle { sender, committed }, join)
 }
 
-fn writer_loop(mut conn: Connection, mut receiver: mpsc::Receiver<WriteRequest>) {
+fn writer_loop(
+    mut conn: Connection,
+    mut receiver: mpsc::Receiver<WriteRequest>,
+    ctx: ProjectionContext,
+    committed: broadcast::Sender<Arc<CommittedBatch>>,
+) {
     while let Some(first) = receiver.blocking_recv() {
         let mut requests = vec![first];
         while requests.len() < MAX_BATCHES_PER_FLUSH {
@@ -71,7 +108,7 @@ fn writer_loop(mut conn: Connection, mut receiver: mpsc::Receiver<WriteRequest>)
                 Err(_) => break,
             }
         }
-        flush(&mut conn, requests);
+        flush(&mut conn, requests, &ctx, &committed);
     }
     // Graceful shutdown: channel closed and drained — final WAL checkpoint.
     if let Err(error) = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);") {
@@ -79,13 +116,20 @@ fn writer_loop(mut conn: Connection, mut receiver: mpsc::Receiver<WriteRequest>)
     }
 }
 
-/// One transaction per flush; completions are sent only after commit.
-fn flush(conn: &mut Connection, requests: Vec<WriteRequest>) {
+/// One transaction per flush; completions and the broadcast are sent only
+/// after commit.
+fn flush(
+    conn: &mut Connection,
+    requests: Vec<WriteRequest>,
+    ctx: &ProjectionContext,
+    committed: &broadcast::Sender<Arc<CommittedBatch>>,
+) {
     let mut results = Vec::with_capacity(requests.len());
+    let mut fanout = CommittedBatch::default();
     let outcome = (|| -> Result<(), rusqlite::Error> {
         let tx = conn.transaction()?;
         for request in &requests {
-            let applied = apply_batch(&tx, &request.batch)?;
+            let applied = apply_batch(&tx, &request.batch, ctx, &mut fanout)?;
             results.push(applied);
         }
         tx.commit()
@@ -93,6 +137,13 @@ fn flush(conn: &mut Connection, requests: Vec<WriteRequest>) {
 
     match outcome {
         Ok(()) => {
+            let inserted_events = fanout.events.len();
+            if inserted_events > 0 {
+                ctx.metrics
+                    .events_ingested_total
+                    .inc_by(inserted_events as u64);
+                let _ = committed.send(Arc::new(fanout));
+            }
             for (request, applied) in requests.into_iter().zip(results) {
                 let _ = request.done.send(Ok(applied));
             }
@@ -111,9 +162,11 @@ fn flush(conn: &mut Connection, requests: Vec<WriteRequest>) {
 fn apply_batch(
     tx: &rusqlite::Transaction<'_>,
     batch: &WriteBatch,
+    ctx: &ProjectionContext,
+    fanout: &mut CommittedBatch,
 ) -> Result<Applied, rusqlite::Error> {
     match batch {
-        WriteBatch::Events(records) => apply_events(tx, records),
+        WriteBatch::Events(records) => apply_events(tx, records, ctx, fanout),
         WriteBatch::MetricSamples(samples) => apply_metric_samples(tx, samples),
     }
 }
@@ -121,8 +174,10 @@ fn apply_batch(
 fn apply_events(
     tx: &rusqlite::Transaction<'_>,
     records: &[EventRecord],
+    ctx: &ProjectionContext,
+    fanout: &mut CommittedBatch,
 ) -> Result<Applied, rusqlite::Error> {
-    let mut inserted = 0usize;
+    let mut applied = Applied::default();
     let mut stmt = tx.prepare_cached(
         "INSERT OR IGNORE INTO events
            (run_id, source_service, event_type, ts_logical, ts_wall_ns, seq,
@@ -130,6 +185,13 @@ fn apply_events(
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
     )?;
     for record in records {
+        #[cfg(feature = "test-hooks")]
+        if record.event_type == TEST_ABORT_EVENT_TYPE {
+            return Err(rusqlite::Error::SqliteFailure(
+                rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_CONSTRAINT),
+                Some("test-hooks: induced mid-batch failure".to_owned()),
+            ));
+        }
         let changed = stmt.execute(rusqlite::params![
             record.run_id,
             record.source_service_stored,
@@ -142,19 +204,49 @@ fn apply_events(
             record.unknown as i64,
             record.ingested_at_ns,
         ])?;
-        // Projections apply only to rows actually inserted (duplicate
-        // replays must be byte-invisible); the projection pass lands with
-        // the M1 ingest package.
-        inserted += changed;
+        track_identity(&mut applied, record);
+        if changed == 0 {
+            continue; // Duplicate seq: projections must not run twice.
+        }
+        applied.inserted += 1;
+        let rowid = tx.last_insert_rowid();
+        if record.unknown {
+            ctx.metrics.events_unknown_type_total.inc();
+        }
+        projections::apply(tx, record, ctx)?;
+        if !fanout.run_ids.contains(&record.run_id) && !record.run_id.is_empty() {
+            fanout.run_ids.push(record.run_id.clone());
+        }
+        fanout.events.push(CommittedEvent {
+            rowid,
+            record: record.clone(),
+        });
     }
-    Ok(Applied { inserted })
+    Ok(applied)
+}
+
+/// Records the batch max seq per identity — duplicates count as covered
+/// (the producer resent something we already have; the ack must still
+/// advance past it, decision D7).
+fn track_identity(applied: &mut Applied, record: &EventRecord) {
+    let seq = record.seq as u64;
+    let key = (record.run_id.clone(), record.source_service_stored.clone());
+    if let Some(entry) = applied
+        .max_seq_by_identity
+        .iter_mut()
+        .find(|(identity, _)| *identity == key)
+    {
+        entry.1 = entry.1.max(seq);
+    } else {
+        applied.max_seq_by_identity.push((key, seq));
+    }
 }
 
 fn apply_metric_samples(
     tx: &rusqlite::Transaction<'_>,
     samples: &[MetricSample],
 ) -> Result<Applied, rusqlite::Error> {
-    let mut inserted = 0usize;
+    let mut applied = Applied::default();
     let mut intern = tx.prepare_cached(
         "INSERT OR IGNORE INTO metric_series (service, metric, labels) VALUES (?1, ?2, ?3)",
     )?;
@@ -178,9 +270,10 @@ fn apply_metric_samples(
             ],
             |row| row.get(0),
         )?;
-        inserted += insert.execute(rusqlite::params![series_id, sample.ts_ns, sample.value])?;
+        applied.inserted +=
+            insert.execute(rusqlite::params![series_id, sample.ts_ns, sample.value])?;
     }
-    Ok(Applied { inserted })
+    Ok(applied)
 }
 
 #[cfg(test)]
@@ -197,7 +290,9 @@ mod tests {
             ts_wall_ns: 1_000 + seq,
             seq,
             payload_version: 1,
-            payload: "{}".into(),
+            payload: format!(
+                r#"{{"node_id":"{seq}","parent_id":null,"snapshot_ref":"snap-{seq}","depth":1,"progress_score":0.5,"novelty_score":0.1,"stage":0,"guest_time_ns":9,"input_delta_bytes":4,"expansion_idx":{seq}}}"#
+            ),
             unknown: false,
             ingested_at_ns: 42,
             source_service: SourceService::ExplorationOrchestrator,
@@ -209,29 +304,54 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = crate::Store::open(&crate::StoreConfig::new(dir.path().join("t.db"))).unwrap();
         let pool = store.read_pool();
-        let (conn, _) = {
-            let (conn, pool2) = store.into_parts();
-            (conn, pool2)
-        };
-        let (writer, join) = spawn_writer(conn);
+        let (conn, _) = store.into_parts();
+        let (writer, join) = spawn_writer(conn, ProjectionContext::default());
+        let mut committed = writer.subscribe();
 
         let applied = writer
             .write(WriteBatch::Events(vec![record(1), record(2)]))
             .await
             .unwrap();
         assert_eq!(applied.inserted, 2);
+        assert_eq!(
+            applied.max_seq_by_identity,
+            vec![(
+                (
+                    "run-a".to_owned(),
+                    "exploration-orchestrator/orchestratord-1".to_owned()
+                ),
+                2
+            )]
+        );
+        let batch = committed.recv().await.unwrap();
+        assert_eq!(batch.events.len(), 2);
+        assert_eq!(batch.run_ids, vec!["run-a".to_owned()]);
 
-        // Overlapping resend: duplicate seqs vanish via INSERT OR IGNORE.
+        // Overlapping resend: duplicate seqs vanish via INSERT OR IGNORE,
+        // but the ack coverage still includes them.
         let applied = writer
             .write(WriteBatch::Events(vec![record(2), record(3)]))
             .await
             .unwrap();
         assert_eq!(applied.inserted, 1);
+        assert_eq!(applied.max_seq_by_identity[0].1, 3);
 
-        let count: i64 = pool
-            .with_read(|conn| conn.query_row("SELECT count(*) FROM events", [], |row| row.get(0)))
+        let (events, nodes, runs): (i64, i64, i64) = pool
+            .with_read(|conn| {
+                Ok((
+                    conn.query_row("SELECT count(*) FROM events", [], |row| row.get(0))?,
+                    conn.query_row("SELECT count(*) FROM tree_nodes", [], |row| row.get(0))?,
+                    conn.query_row(
+                        "SELECT nodes_added FROM runs WHERE run_id='run-a'",
+                        [],
+                        |row| row.get(0),
+                    )?,
+                ))
+            })
             .unwrap();
-        assert_eq!(count, 3);
+        assert_eq!(events, 3);
+        assert_eq!(nodes, 3);
+        assert_eq!(runs, 3, "duplicate replay must not double projections");
 
         drop(writer);
         join.join().unwrap();
@@ -243,7 +363,7 @@ mod tests {
         let store = crate::Store::open(&crate::StoreConfig::new(dir.path().join("t.db"))).unwrap();
         let pool = store.read_pool();
         let (conn, _) = store.into_parts();
-        let (writer, join) = spawn_writer(conn);
+        let (writer, join) = spawn_writer(conn, ProjectionContext::default());
 
         let key = SeriesKey::new("event", "kept", "{}");
         let samples = vec![

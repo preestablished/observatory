@@ -1,0 +1,21 @@
+# HELP sc_score_requests_total Score requests served.
+# TYPE sc_score_requests_total counter
+sc_score_requests_total 88231
+# HELP sc_gpu_batch_latency_seconds GPU batch latency.
+# TYPE sc_gpu_batch_latency_seconds histogram
+sc_gpu_batch_latency_seconds_bucket{le="0.005"} 1200
+sc_gpu_batch_latency_seconds_bucket{le="0.01"} 3400
+sc_gpu_batch_latency_seconds_bucket{le="0.025"} 4100
+sc_gpu_batch_latency_seconds_bucket{le="0.1"} 4190
+sc_gpu_batch_latency_seconds_bucket{le="+Inf"} 4200
+sc_gpu_batch_latency_seconds_sum 38.7
+sc_gpu_batch_latency_seconds_count 4200
+# HELP sc_archive_cells Occupied archive cells.
+# TYPE sc_archive_cells gauge
+sc_archive_cells 15320
+# HELP sc_dedup_hits_total Dedup hits.
+# TYPE sc_dedup_hits_total counter
+sc_dedup_hits_total 22110
+# HELP sc_embed_queue_depth Embedding queue depth.
+# TYPE sc_embed_queue_depth gauge
+sc_embed_queue_depth 37

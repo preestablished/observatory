@@ -1,0 +1,8 @@
+# HELP cp_api_requests_total API requests served.
+# TYPE cp_api_requests_total counter
+cp_api_requests_total{path="/api/v1/runs",method="GET"} 4021
+cp_api_requests_total{path="/api/v1/render",method="POST"} 12
+# HELP cp_render_jobs_queued Render jobs waiting for dispatch.
+# TYPE cp_render_jobs_queued gauge
+cp_render_jobs_queued 3
+cp_build_info{version="1.2.3"} 1
