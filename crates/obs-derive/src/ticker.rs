@@ -90,8 +90,17 @@ impl RollupTicker {
 
     async fn promote(&self, from: Grain, to: Grain) -> Result<usize, StoreError> {
         let now = self.clock.now_ns();
-        // Only promote source buckets whose TARGET bucket is closed.
-        let boundary = fold::bucket_of(now, to.width_ns());
+        // Only promote source buckets whose TARGET bucket is closed —
+        // AND whose source grain has actually been folded that far. The
+        // second cap matters when the fine ticker lags: promoting past
+        // the source's folded frontier would advance this grain's
+        // high-water over 5s rows that don't exist yet, silently dropping
+        // them from the coarse grains when they do arrive.
+        let source_frontier = self.high_water(from)?;
+        let boundary = fold::bucket_of(now, to.width_ns()).min(fold::bucket_of(
+            source_frontier.saturating_add(1),
+            to.width_ns(),
+        ));
         let high_water = self.high_water(to)?;
         let source: Vec<RollupRow> = self.pool.with_read(|conn| {
             let sql = format!(

@@ -40,8 +40,10 @@ pub async fn publish(
     let mut report = PublishReport::default();
     let final_seq = sim_config.start_seq + sim_config.events - 1;
     let mut acked: u64 = sim_config.start_seq.saturating_sub(1);
+    let mut stalled_attempts = 0u32;
 
     loop {
+        let acked_before = acked;
         let attempt = if publish_config.bulk {
             publish_bulk(&sim_config, &publish_config, acked, &mut report).await
         } else {
@@ -52,6 +54,23 @@ pub async fn publish(
                 acked = acked.max(high);
                 if acked >= final_seq {
                     break;
+                }
+                // Rejected envelopes are never acked, so a stream whose
+                // TAIL was rejected legitimately ends short of final_seq.
+                // Two clean completions with no ack progress means the
+                // remaining gap is rejections, not loss — stop rather
+                // than resend the same rejected tail forever.
+                if acked == acked_before {
+                    stalled_attempts += 1;
+                    if stalled_attempts >= 2 {
+                        tracing_note(&format!(
+                            "stopping at acked_seq {acked} (< {final_seq}): no ack progress \
+                             across attempts — the unacked tail is rejected envelopes"
+                        ));
+                        break;
+                    }
+                } else {
+                    stalled_attempts = 0;
                 }
                 // Stream closed clean but not fully acked (server ended
                 // early); treat like a disconnect when resuming.
